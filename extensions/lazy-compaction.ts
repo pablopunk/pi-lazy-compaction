@@ -303,7 +303,7 @@ ${conversationText}
 		};
 		lastTriggeredLeafId = boundaryLeafId;
 
-		setStatus(ctx, "compacting on the background...");
+		setStatus(ctx, "compacting in the background...");
 		void runLazyCompaction(ctx, job);
 	}
 

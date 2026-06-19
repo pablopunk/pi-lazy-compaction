@@ -9,7 +9,7 @@ summary-through-pinned-boundary + full messages after boundary
 The active footer/status text is intentionally minimal:
 
 ```text
-compacting on the background...
+compacting in the background...
 ```
 
 No slash commands are added; configuration lives in `settings.json`.
