@@ -1,6 +1,6 @@
 {
   "name": "pi-lazy-compaction",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lazy background compaction for pi sessions that does not block interactive input.",
   "keywords": [
     "pi-package",
