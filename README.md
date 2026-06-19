@@ -2,19 +2,12 @@
 
 <img width="1330" height="1073" alt="lazy compaction arrows" src="https://github.com/user-attachments/assets/52110d6d-c1cd-4d52-8f1e-14abe6407281" />
 
-Lazy background compaction for [pi](https://pi.dev): when the conversation crosses a configurable context threshold, pi summarizes the current branch in the background while you keep typing. When the summary finishes, future model calls see:
+## TLDR;
 
-```text
-summary-through-pinned-boundary + full messages after boundary
-```
-
-The active footer/status text is intentionally minimal:
-
-```text
-compacting in the background...
-```
-
-No slash commands are added; configuration lives in `settings.json`.
+* You set a threshold, e.g., 80%:
+* When you reach it, the full context will start to be compacted in the background.
+* You can still iterate with the agent; those new messages WILL NOT get compacted.
+* Once the compaction finishes, the new context will contain a summary of the compacted context + your new messages in full.
 
 ## Install from GitHub
 
