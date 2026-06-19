@@ -1,5 +1,7 @@
 # pi-lazy-compaction
 
+<img width="1330" height="1073" alt="lazy compaction arrows" src="https://github.com/user-attachments/assets/52110d6d-c1cd-4d52-8f1e-14abe6407281" />
+
 Lazy background compaction for [pi](https://pi.dev): when the conversation crosses a configurable context threshold, pi summarizes the current branch in the background while you keep typing. When the summary finishes, future model calls see:
 
 ```text
