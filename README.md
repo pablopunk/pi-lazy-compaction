@@ -13,8 +13,6 @@
 
 ```bash
 pi install git:github.com/pablopunk/pi-lazy-compaction
-# or over SSH
-pi install git:git@github.com:pablopunk/pi-lazy-compaction.git
 ```
 
 Then restart pi or run:
