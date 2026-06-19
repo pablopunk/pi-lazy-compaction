@@ -1,8 +1,8 @@
-# pi-lazy-compaction
+# pi-async-compaction
 
 > non-blocking compaction for [pi.dev](https://pi.dev/)
 
-<img width="1330" height="1073" alt="lazy compaction arrows" src="https://github.com/user-attachments/assets/52110d6d-c1cd-4d52-8f1e-14abe6407281" />
+<img width="1330" height="1073" alt="async compaction arrows" src="https://github.com/user-attachments/assets/52110d6d-c1cd-4d52-8f1e-14abe6407281" />
 
 ## TLDR;
 
@@ -14,7 +14,7 @@
 ## Install from GitHub
 
 ```bash
-pi install git:github.com/pablopunk/pi-lazy-compaction
+pi install git:github.com/pablopunk/pi-async-compaction
 ```
 
 Then restart pi or run:
@@ -29,7 +29,7 @@ In `~/.pi/agent/settings.json` (or `.pi/settings.json` for trusted projects):
 
 ```json
 {
-  "lazyCompaction": {
+  "asyncCompaction": {
     "enabled": true,
     "thresholdPercent": 80
   }
@@ -38,16 +38,16 @@ In `~/.pi/agent/settings.json` (or `.pi/settings.json` for trusted projects):
 
 | Option | Default | Description |
 |---|---|---|
-| `enabled` | `false` | Enable lazy compaction |
+| `enabled` | `false` | Enable async compaction |
 | `thresholdPercent` | `80` | Context usage % that triggers compaction |
 | `summarizer` | current model | Optional model, e.g. `"anthropic/claude-sonnet-4-5"` or `{ "provider", "model" }` |
 
-Disable pi's built-in auto-compaction so it doesn't fight with lazy compaction:
+Disable pi's built-in auto-compaction so it doesn't fight with async compaction:
 
 ```json
 {
   "compaction": { "enabled": false },
-  "lazyCompaction": { "enabled": true, "thresholdPercent": 80 }
+  "asyncCompaction": { "enabled": true, "thresholdPercent": 80 }
 }
 ```
 
@@ -55,9 +55,9 @@ Manual `/compact` remains available.
 
 ## Commands
 
-### `/lazy-compaction`
+### `/async-compaction`
 
-Manually triggers lazy compaction immediately, regardless of the configured threshold or whether `enabled` is `false`. If a compaction is already running, it cancels it and starts a fresh one.
+Manually triggers async compaction immediately, regardless of the configured threshold or whether `enabled` is `false`. If a compaction is already running, it cancels it and starts a fresh one.
 
 ## How it works
 
@@ -65,9 +65,9 @@ On `agent_end`, the extension estimates current session context usage. Once usag
 
 After the summary completes, it appends a compaction entry directly with `firstKeptEntryId` set to the first current-branch entry after the pinned boundary. Future provider requests are adjusted through pi's `context` hook so the model receives the new compacted shape.
 
-### Rolling summary vs lazy compaction
+### Rolling summary vs async compaction
 
-| | Rolling summary (built-in) | Lazy compaction |
+| | Rolling summary (built-in) | Async compaction |
 |---|---|---|
 | Blocks agent | ✅ | ❌ (background) |
 | Suffix messages | ❌ eventually summarized away | ✅ preserved verbatim |

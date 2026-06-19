@@ -1,11 +1,11 @@
 {
-  "name": "pi-lazy-compaction",
-  "version": "0.1.2",
-  "description": "Lazy background compaction for pi sessions that does not block interactive input.",
+  "name": "pi-async-compaction",
+  "version": "0.2.0",
+  "description": "Async compaction for pi sessions that does not block interactive input.",
   "keywords": [
     "pi-package",
     "pi-extension",
-    "lazy-compaction",
+    "async-compaction",
     "compaction"
   ],
   "license": "MIT",
@@ -16,7 +16,7 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/lazy-compaction.ts"
+      "./extensions/async-compaction.ts"
     ]
   }
 }

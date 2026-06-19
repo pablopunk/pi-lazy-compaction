@@ -5,13 +5,13 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { buildSessionContext, convertToLlm, estimateTokens, serializeConversation } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_THRESHOLD_PERCENT = 80;
-const STATUS_KEY = "lazy-compaction";
+const STATUS_KEY = "async-compaction";
 const SUMMARY_MAX_TOKENS = 8192;
-const SETTINGS_KEY = "lazyCompaction";
+const SETTINGS_KEY = "asyncCompaction";
 
-const SENTINEL_FIRST_KEPT_ID = "__lazy_compaction_no_entries_after_boundary__";
+const SENTINEL_FIRST_KEPT_ID = "__async_compaction_no_entries_after_boundary__";
 
-type LazyCompactionJob = {
+type AsyncCompactionJob = {
 	id: number;
 	boundaryLeafId: string;
 	startedAt: number;
@@ -20,7 +20,7 @@ type LazyCompactionJob = {
 	controller: AbortController;
 };
 
-type LazyCompactionSettings = {
+type AsyncCompactionSettings = {
 	enabled: boolean;
 	thresholdPercent: number;
 	summarizer?: { provider: string; model: string };
@@ -60,7 +60,7 @@ function parseSummarizer(value: unknown): { provider: string; model: string } | 
 	return undefined;
 }
 
-function applySettings(base: LazyCompactionSettings, raw: unknown): LazyCompactionSettings {
+function applySettings(base: AsyncCompactionSettings, raw: unknown): AsyncCompactionSettings {
 	if (!isRecord(raw) || !(SETTINGS_KEY in raw)) return base;
 
 	const value = raw[SETTINGS_KEY];
@@ -78,8 +78,8 @@ function applySettings(base: LazyCompactionSettings, raw: unknown): LazyCompacti
 	return next;
 }
 
-function loadSettings(ctx: ExtensionContext): LazyCompactionSettings {
-	let settings: LazyCompactionSettings = {
+function loadSettings(ctx: ExtensionContext): AsyncCompactionSettings {
+	let settings: AsyncCompactionSettings = {
 		enabled: false,
 		thresholdPercent: DEFAULT_THRESHOLD_PERCENT,
 	};
@@ -130,12 +130,12 @@ function isAbortError(error: unknown): boolean {
 	return error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("abort"));
 }
 
-export default function lazyCompaction(pi: ExtensionAPI) {
-	let settings: LazyCompactionSettings = {
+export default function asyncCompaction(pi: ExtensionAPI) {
+	let settings: AsyncCompactionSettings = {
 		enabled: false,
 		thresholdPercent: DEFAULT_THRESHOLD_PERCENT,
 	};
-	let job: LazyCompactionJob | null = null;
+	let job: AsyncCompactionJob | null = null;
 	let nextJobId = 1;
 	let lastTriggeredLeafId: string | null = null;
 	let latestAppliedCompactionEntryId: string | null = null;
@@ -144,7 +144,7 @@ export default function lazyCompaction(pi: ExtensionAPI) {
 		if (ctx.hasUI) ctx.ui.setStatus(STATUS_KEY, text);
 	}
 
-	function finishJob(ctx: ExtensionContext, activeJob: LazyCompactionJob) {
+	function finishJob(ctx: ExtensionContext, activeJob: AsyncCompactionJob) {
 		if (job?.id !== activeJob.id) return;
 		job = null;
 		setStatus(ctx, undefined);
@@ -166,7 +166,7 @@ export default function lazyCompaction(pi: ExtensionAPI) {
 		return undefined;
 	}
 
-	async function runLazyCompaction(ctx: ExtensionContext, activeJob: LazyCompactionJob) {
+	async function runAsyncCompaction(ctx: ExtensionContext, activeJob: AsyncCompactionJob) {
 		try {
 			// Yield before doing any potentially expensive serialization so the TUI can
 			// return to the editor immediately after agent_end.
@@ -175,7 +175,7 @@ export default function lazyCompaction(pi: ExtensionAPI) {
 
 			const branchAtStart = ctx.sessionManager.getBranch(activeJob.boundaryLeafId);
 			if (!branchAtStart.some((entry) => entry.id === activeJob.boundaryLeafId)) {
-				notify(ctx, "Lazy compaction boundary is no longer on this branch; cancelling", "warning");
+				notify(ctx, "Async compaction boundary is no longer on this branch; cancelling", "warning");
 				return;
 			}
 
@@ -185,7 +185,7 @@ export default function lazyCompaction(pi: ExtensionAPI) {
 
 			const selected = await chooseSummarizer(ctx);
 			if (!selected) {
-				notify(ctx, "No authenticated model available for lazy compaction", "error");
+				notify(ctx, "No authenticated model available for async compaction", "error");
 				return;
 			}
 
@@ -199,7 +199,7 @@ export default function lazyCompaction(pi: ExtensionAPI) {
 							content: [
 								{
 									type: "text" as const,
-									text: `You are lazily compacting an interactive coding-agent session in the background.
+									text: `You are asynchronously compacting an interactive coding-agent session in the background.
 
 Create a high-signal summary of ALL context below. This summary will replace everything up to a pinned boundary. Any messages created after the boundary will be preserved verbatim after your summary, so do not invent future events.
 
@@ -240,7 +240,7 @@ ${conversationText}
 
 			const summary = extractText(response);
 			if (!summary) {
-				notify(ctx, "Lazy compaction produced an empty summary", "error");
+				notify(ctx, "Async compaction produced an empty summary", "error");
 				return;
 			}
 
@@ -250,7 +250,7 @@ ${conversationText}
 			const currentBranch = ctx.sessionManager.getBranch();
 			const currentBoundaryIdx = currentBranch.findIndex((entry) => entry.id === activeJob.boundaryLeafId);
 			if (currentBoundaryIdx === -1) {
-				notify(ctx, "Lazy compaction branch changed while summarizing; cancelling", "warning");
+				notify(ctx, "Async compaction branch changed while summarizing; cancelling", "warning");
 				return;
 			}
 
@@ -262,7 +262,7 @@ ${conversationText}
 				firstKeptEntryId,
 				tokensBefore,
 				{
-					kind: "lazy-compaction",
+					kind: "async-compaction",
 					boundaryLeafId: activeJob.boundaryLeafId,
 					firstKeptEntryId,
 					startedAt: new Date(activeJob.startedAt).toISOString(),
@@ -274,17 +274,17 @@ ${conversationText}
 				true,
 			);
 
-			notify(ctx, "Lazy compaction applied", "info");
+			notify(ctx, "Async compaction applied", "info");
 		} catch (error) {
 			if (!isAbortError(error)) {
-				notify(ctx, `Lazy compaction failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+				notify(ctx, `Async compaction failed: ${error instanceof Error ? error.message : String(error)}`, "error");
 			}
 		} finally {
 			finishJob(ctx, activeJob);
 		}
 	}
 
-	function startLazyCompaction(ctx: ExtensionContext, opts?: { force?: boolean }) {
+	function startAsyncCompaction(ctx: ExtensionContext, opts?: { force?: boolean }) {
 		const force = opts?.force ?? false;
 
 		if (!force && !settings.enabled) return;
@@ -311,7 +311,7 @@ ${conversationText}
 		lastTriggeredLeafId = boundaryLeafId;
 
 		setStatus(ctx, "compacting in the background...");
-		void runLazyCompaction(ctx, job);
+		void runAsyncCompaction(ctx, job);
 	}
 
 	pi.on("session_start", (_event, ctx) => {
@@ -330,7 +330,7 @@ ${conversationText}
 		if (percent === undefined || percent === null) return;
 		if (percent < settings.thresholdPercent) return;
 
-		startLazyCompaction(ctx);
+		startAsyncCompaction(ctx);
 	});
 
 	pi.on("context", (_event, ctx) => {
@@ -343,15 +343,15 @@ ${conversationText}
 		};
 	});
 
-	pi.registerCommand("lazy-compaction", {
-		description: "Manually trigger lazy background compaction",
+	pi.registerCommand("async-compaction", {
+		description: "Manually trigger async background compaction",
 		handler: async (_args, ctx) => {
 			if (job) {
-				ctx.ui.notify("A lazy compaction is already running; cancelling and restarting...", "info");
+				ctx.ui.notify("An async compaction is already running; cancelling and restarting...", "info");
 			} else {
-				ctx.ui.notify("Triggering lazy compaction...", "info");
+				ctx.ui.notify("Triggering async compaction...", "info");
 			}
-			startLazyCompaction(ctx, { force: true });
+			startAsyncCompaction(ctx, { force: true });
 		},
 	});
 
