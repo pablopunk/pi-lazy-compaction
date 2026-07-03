@@ -32,7 +32,8 @@ In `~/.pi/agent/settings.json` (or `.pi/settings.json` for trusted projects):
 {
   "asyncCompaction": {
     "enabled": true,
-    "thresholdPercent": 80
+    "thresholdPercent": 80,
+    "debug": false
   }
 }
 ```
@@ -41,6 +42,7 @@ In `~/.pi/agent/settings.json` (or `.pi/settings.json` for trusted projects):
 |---|---|---|
 | `enabled` | `false` | Enable async compaction |
 | `thresholdPercent` | `80` | Context usage % that triggers compaction |
+| `debug` | `false` | Show auto-trigger checks and skip reasons in the UI |
 | `summarizer` | current model | Optional model, e.g. `"anthropic/claude-sonnet-4-5"` or `{ "provider", "model" }` |
 
 Disable pi's built-in auto-compaction so it doesn't fight with async compaction:
@@ -62,7 +64,7 @@ Manually triggers async compaction immediately, regardless of the configured thr
 
 ## How it works
 
-On `agent_end`, the extension estimates current session context usage. Once usage crosses `thresholdPercent`, it pins the current leaf entry as the boundary and starts a detached summarization job without calling `ctx.compact()`.
+On `agent_end`, the extension estimates current session context usage, falling back to pi's built-in context usage when needed. Once usage crosses `thresholdPercent`, it pins the current leaf entry as the boundary and starts a detached summarization job without calling `ctx.compact()`.
 
 After the summary completes, it appends a compaction entry directly with `firstKeptEntryId` set to the first current-branch entry after the pinned boundary. Future provider requests are adjusted through pi's `context` hook so the model receives the new compacted shape.
 

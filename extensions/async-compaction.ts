@@ -23,7 +23,15 @@ type AsyncCompactionJob = {
 type AsyncCompactionSettings = {
 	enabled: boolean;
 	thresholdPercent: number;
+	debug: boolean;
 	summarizer?: { provider: string; model: string };
+};
+
+type SessionContextUsage = {
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+	source: "estimate" | "pi";
 };
 
 type AppendableSessionManager = ExtensionContext["sessionManager"] & {
@@ -69,6 +77,7 @@ function applySettings(base: AsyncCompactionSettings, raw: unknown): AsyncCompac
 
 	const next = { ...base, summarizer: base.summarizer ? { ...base.summarizer } : undefined };
 	if (typeof value.enabled === "boolean") next.enabled = value.enabled;
+	if (typeof value.debug === "boolean") next.debug = value.debug;
 	if (typeof value.thresholdPercent === "number" && value.thresholdPercent > 0 && value.thresholdPercent < 100) {
 		next.thresholdPercent = value.thresholdPercent;
 	}
@@ -82,6 +91,7 @@ function loadSettings(ctx: ExtensionContext): AsyncCompactionSettings {
 	let settings: AsyncCompactionSettings = {
 		enabled: false,
 		thresholdPercent: DEFAULT_THRESHOLD_PERCENT,
+		debug: false,
 	};
 
 	try {
@@ -105,7 +115,7 @@ function estimateMessagesTokens(messages: Parameters<typeof estimateTokens>[0][]
 	return messages.reduce((total, message) => total + estimateTokens(message), 0);
 }
 
-function getSessionContextUsage(ctx: ExtensionContext): { tokens: number; contextWindow: number; percent: number } | undefined {
+function getEstimatedSessionContextUsage(ctx: ExtensionContext): SessionContextUsage | undefined {
 	const contextWindow = ctx.model?.contextWindow ?? 0;
 	if (contextWindow <= 0) return undefined;
 
@@ -115,7 +125,23 @@ function getSessionContextUsage(ctx: ExtensionContext): { tokens: number; contex
 		tokens,
 		contextWindow,
 		percent: (tokens / contextWindow) * 100,
+		source: "estimate",
 	};
+}
+
+function getPiContextUsage(ctx: ExtensionContext): SessionContextUsage | undefined {
+	const usage = ctx.getContextUsage();
+	if (!usage || usage.tokens === null || usage.percent === null) return undefined;
+	return {
+		tokens: usage.tokens,
+		contextWindow: usage.contextWindow,
+		percent: usage.percent,
+		source: "pi",
+	};
+}
+
+function getSessionContextUsage(ctx: ExtensionContext): SessionContextUsage | undefined {
+	return getEstimatedSessionContextUsage(ctx) ?? getPiContextUsage(ctx);
 }
 
 function extractText(response: Awaited<ReturnType<typeof complete>>): string {
@@ -134,6 +160,7 @@ export default function asyncCompaction(pi: ExtensionAPI) {
 	let settings: AsyncCompactionSettings = {
 		enabled: false,
 		thresholdPercent: DEFAULT_THRESHOLD_PERCENT,
+		debug: false,
 	};
 	let job: AsyncCompactionJob | null = null;
 	let nextJobId = 1;
@@ -142,6 +169,10 @@ export default function asyncCompaction(pi: ExtensionAPI) {
 
 	function setStatus(ctx: ExtensionContext, text?: string) {
 		if (ctx.hasUI) ctx.ui.setStatus(STATUS_KEY, text);
+	}
+
+	function debug(ctx: ExtensionContext, message: string) {
+		if (settings.debug) notify(ctx, `Async compaction debug: ${message}`, "info");
 	}
 
 	function finishJob(ctx: ExtensionContext, activeJob: AsyncCompactionJob) {
@@ -284,7 +315,7 @@ ${conversationText}
 		}
 	}
 
-	function startAsyncCompaction(ctx: ExtensionContext, opts?: { force?: boolean }) {
+	function startAsyncCompaction(ctx: ExtensionContext, opts?: { force?: boolean; usage?: SessionContextUsage }) {
 		const force = opts?.force ?? false;
 
 		if (!force && !settings.enabled) return;
@@ -299,7 +330,7 @@ ${conversationText}
 		if (!boundaryLeafId) return;
 		if (!force && lastTriggeredLeafId === boundaryLeafId) return;
 
-		const usage = getSessionContextUsage(ctx);
+		const usage = opts?.usage ?? getSessionContextUsage(ctx);
 		job = {
 			id: nextJobId++,
 			boundaryLeafId,
@@ -323,14 +354,33 @@ ${conversationText}
 	});
 
 	pi.on("agent_end", (_event, ctx) => {
-		if (!settings.enabled || job) return;
+		if (!settings.enabled) {
+			debug(ctx, "auto skipped: disabled");
+			return;
+		}
+		if (job) {
+			debug(ctx, `auto skipped: job ${job.id} already running`);
+			return;
+		}
 
 		const usage = getSessionContextUsage(ctx);
-		const percent = usage?.percent;
-		if (percent === undefined || percent === null) return;
-		if (percent < settings.thresholdPercent) return;
+		if (!usage) {
+			debug(ctx, "auto skipped: context usage unavailable");
+			return;
+		}
 
-		startAsyncCompaction(ctx);
+		debug(
+			ctx,
+			`auto check: ${usage.tokens.toLocaleString()} / ${usage.contextWindow.toLocaleString()} tokens (${formatPercent(usage.percent)} via ${usage.source}), threshold ${formatPercent(settings.thresholdPercent)}`,
+		);
+
+		if (usage.percent < settings.thresholdPercent) {
+			debug(ctx, "auto skipped: below threshold");
+			return;
+		}
+
+		debug(ctx, "auto triggering compaction");
+		startAsyncCompaction(ctx, { usage });
 	});
 
 	pi.on("context", (_event, ctx) => {

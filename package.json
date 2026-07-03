@@ -1,6 +1,6 @@
 {
   "name": "pi-async-compaction",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Async compaction for pi sessions that does not block interactive input.",
   "keywords": [
     "pi-package",
