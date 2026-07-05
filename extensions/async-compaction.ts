@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { complete } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { buildSessionContext, convertToLlm, estimateTokens, serializeConversation } from "@earendil-works/pi-coding-agent";
 
@@ -50,9 +51,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readJson(path: string): unknown | undefined {
+function readJson(path: string, ctx?: ExtensionContext): unknown | undefined {
 	if (!existsSync(path)) return undefined;
-	return JSON.parse(readFileSync(path, "utf8"));
+	try {
+		return JSON.parse(readFileSync(path, "utf8"));
+	} catch (error) {
+		if (ctx) notify(ctx, `Could not parse JSON from ${path}: ${error instanceof Error ? error.message : String(error)}`, "warning");
+		return undefined;
+	}
 }
 
 function parseSummarizer(value: unknown): { provider: string; model: string } | undefined {
@@ -95,14 +101,17 @@ function loadSettings(ctx: ExtensionContext): AsyncCompactionSettings {
 	};
 
 	try {
-		settings = applySettings(settings, readJson(join(process.env.HOME ?? "", ".pi/agent/settings.json")));
+		const home = homedir();
+		if (home) {
+			settings = applySettings(settings, readJson(join(home, ".pi/agent/settings.json"), ctx));
+		}
 	} catch (error) {
 		notify(ctx, `Could not read global ${SETTINGS_KEY} settings: ${error instanceof Error ? error.message : String(error)}`, "warning");
 	}
 
 	if (ctx.isProjectTrusted()) {
 		try {
-			settings = applySettings(settings, readJson(join(ctx.cwd, ".pi/settings.json")));
+			settings = applySettings(settings, readJson(join(ctx.cwd, ".pi/settings.json"), ctx));
 		} catch (error) {
 			notify(ctx, `Could not read project ${SETTINGS_KEY} settings: ${error instanceof Error ? error.message : String(error)}`, "warning");
 		}
@@ -146,8 +155,8 @@ function getSessionContextUsage(ctx: ExtensionContext): SessionContextUsage | un
 
 function extractText(response: Awaited<ReturnType<typeof complete>>): string {
 	return response.content
-		.filter((part): part is { type: "text"; text: string } => part.type === "text")
-		.map((part) => part.text)
+		.filter((part: { type: string; text?: string }): part is { type: "text"; text: string } => part.type === "text")
+		.map((part: { type: "text"; text: string }) => part.text)
 		.join("\n")
 		.trim();
 }
@@ -190,6 +199,7 @@ export default function asyncCompaction(pi: ExtensionAPI) {
 		);
 
 		for (const model of candidates) {
+			if (!model) continue;
 			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 			if (auth.ok && auth.apiKey) return { model, auth };
 		}
@@ -222,7 +232,7 @@ export default function asyncCompaction(pi: ExtensionAPI) {
 
 			const { model, auth } = selected;
 			const response = await complete(
-				model,
+				model!,
 				{
 					messages: [
 						{
@@ -300,7 +310,7 @@ ${conversationText}
 					completedAt: new Date().toISOString(),
 					triggerPercent: activeJob.triggerPercent,
 					thresholdPercent: settings.thresholdPercent,
-					summarizer: `${model.provider}/${model.id}`,
+					summarizer: `${model!.provider}/${model!.id}`,
 				},
 				true,
 			);

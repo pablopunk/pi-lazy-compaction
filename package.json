@@ -18,5 +18,16 @@
     "extensions": [
       "./extensions/async-compaction.ts"
     ]
+  },
+  "scripts": {
+    "tsc": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.2",
+    "@earendil-works/pi-coding-agent": "^0.80.2",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }
